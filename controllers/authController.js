@@ -44,4 +44,46 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { login };   
+const register = async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email dan password wajib diisi' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: 'Format email tidak valid' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Password minimal 6 karakter' });
+  }
+
+  try {
+    const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing.length > 0) {
+      return res.status(409).json({ message: 'Email sudah terdaftar' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [result] = await db.query(
+      'INSERT INTO users (email, password) VALUES (?, ?)',
+      [email, hashedPassword]
+    );
+
+    const token = jwt.sign(
+      { id: result.insertId, email },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.status(201).json({
+      message: 'Akun berhasil dibuat',
+      token,
+      user: { id: result.insertId, email },
+    });
+  } catch (error) {
+    console.error('REGISTER ERROR:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+};
+
+module.exports = { login, register };
