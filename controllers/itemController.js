@@ -59,4 +59,39 @@ async function deleteAll(req, res) {
   }
 }
 
-module.exports = { addItems, getTotals, deleteAll };
+async function getHistory(req, res) {
+  try {
+    const userId = req.user.id;
+    const [rows] = await pool.query(
+      `SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, name, SUM(quantity) AS total
+       FROM items
+       WHERE user_id = ?
+       GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d'), name
+       ORDER BY date DESC, name ASC`,
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mengambil riwayat' });
+  }
+}
+
+async function deleteByDate(req, res) {
+  try {
+    const userId = req.user.id;
+    const { date } = req.params;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'Format tanggal tidak valid' });
+    }
+
+    await pool.query('DELETE FROM items WHERE user_id = ? AND DATE(created_at) = ?', [userId, date]);
+    res.json({ message: `Data tanggal ${date} berhasil dihapus` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghapus data' });
+  }
+}
+
+module.exports = { addItems, getTotals, deleteAll, getHistory, deleteByDate };
