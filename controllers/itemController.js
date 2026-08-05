@@ -1,12 +1,20 @@
 const pool = require('../config/database');
+const crypto = require('crypto');
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function addItems(req, res) {
   try {
     const items = req.body.items;
     const userId = req.user.id;
+    let sessionId = req.body.sessionId;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'items harus berupa array dan tidak boleh kosong' });
+    }
+
+    if (!sessionId || !UUID_PATTERN.test(sessionId)) {
+      sessionId = crypto.randomUUID();
     }
 
     const validItems = [];
@@ -17,28 +25,61 @@ async function addItems(req, res) {
       const quantity = Number(item.quantity);
 
       if (name && Number.isInteger(quantity) && quantity > 0) {
-        validItems.push([userId, name, quantity]);
+        validItems.push([userId, name, quantity, sessionId]);
       } else {
         skippedLines.push(index + 1);
       }
     });
 
     if (validItems.length > 0) {
-      await pool.query('INSERT INTO items (user_id, name, quantity) VALUES ?', [validItems]);
+      await pool.query('INSERT INTO items (user_id, name, quantity, session_id) VALUES ?', [validItems]);
     }
 
-    res.status(201).json({ inserted: validItems.length, skipped: skippedLines.length, skippedLines });
+    res.status(201).json({
+      inserted: validItems.length,
+      skipped: skippedLines.length,
+      skippedLines,
+      sessionId: validItems.length > 0 ? sessionId : null,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal menyimpan data' });
   }
 }
 
+async function getSessionTotals(req, res) {
+  try {
+    const userId = req.user.id;
+    const { sessionId } = req.params;
+    const [rows] = await pool.query(
+      'SELECT name, SUM(quantity) AS total FROM items WHERE user_id = ? AND session_id = ? GROUP BY name ORDER BY name',
+      [userId, sessionId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mengambil total sesi' });
+  }
+}
+
 async function getTotals(req, res) {
   try {
     const userId = req.user.id;
+    const scope = req.query.scope || 'today';
+
+    let dateFilter = '';
+    if (scope === 'today') {
+      dateFilter = 'AND DATE(created_at) = CURDATE()';
+    } else if (scope === 'month') {
+      dateFilter = 'AND YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())';
+    } else if (scope === 'all') {
+      dateFilter = '';
+    } else {
+      return res.status(400).json({ error: 'scope harus today, month, atau all' });
+    }
+
     const [rows] = await pool.query(
-      'SELECT name, SUM(quantity) AS total FROM items WHERE user_id = ? GROUP BY name ORDER BY name',
+      `SELECT name, SUM(quantity) AS total FROM items WHERE user_id = ? ${dateFilter} GROUP BY name ORDER BY name`,
       [userId]
     );
     res.json(rows);
@@ -64,8 +105,7 @@ async function getHistory(req, res) {
     const userId = req.user.id;
     const [rows] = await pool.query(
       `SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS date, name, SUM(quantity) AS total
-       FROM items
-       WHERE user_id = ?
+       FROM items WHERE user_id = ?
        GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d'), name
        ORDER BY date DESC, name ASC`,
       [userId]
@@ -81,11 +121,9 @@ async function deleteByDate(req, res) {
   try {
     const userId = req.user.id;
     const { date } = req.params;
-
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({ error: 'Format tanggal tidak valid' });
     }
-
     await pool.query('DELETE FROM items WHERE user_id = ? AND DATE(created_at) = ?', [userId, date]);
     res.json({ message: `Data tanggal ${date} berhasil dihapus` });
   } catch (err) {
@@ -94,4 +132,4 @@ async function deleteByDate(req, res) {
   }
 }
 
-module.exports = { addItems, getTotals, deleteAll, getHistory, deleteByDate };
+module.exports = { addItems, getTotals, deleteAll, getHistory, deleteByDate, getSessionTotals };
