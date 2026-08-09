@@ -132,4 +132,89 @@ async function deleteByDate(req, res) {
   }
 }
 
-module.exports = { addItems, getTotals, deleteAll, getHistory, deleteByDate, getSessionTotals };
+async function getItemRows(req, res) {
+  try {
+    const userId = req.user.id;
+    const { name, sessionId, scope, date } = req.query;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Parameter name wajib diisi' });
+    }
+
+    let filterClause = '';
+    const params = [userId, name];
+
+    if (sessionId) {
+      filterClause = 'AND session_id = ?';
+      params.push(sessionId);
+    } else if (date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Format tanggal tidak valid' });
+      }
+      filterClause = 'AND DATE(created_at) = ?';
+      params.push(date);
+    } else if (scope === 'today') {
+      filterClause = 'AND DATE(created_at) = CURDATE()';
+    } else if (scope === 'month') {
+      filterClause = 'AND YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())';
+    } else if (scope === 'all') {
+      filterClause = '';
+    } else {
+      return res.status(400).json({ error: 'Harus sertakan salah satu: sessionId, date, atau scope' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT id, name, quantity, created_at FROM items WHERE user_id = ? AND name = ? ${filterClause} ORDER BY created_at ASC`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mengambil detail item' });
+  }
+}
+
+async function updateItem(req, res) {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const name = String(req.body.name || '').trim();
+    const quantity = Number(req.body.quantity);
+
+    if (!name || !Number.isInteger(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'Nama dan jumlah harus valid' });
+    }
+
+    const [result] = await pool.query(
+      'UPDATE items SET name = ?, quantity = ? WHERE id = ? AND user_id = ?',
+      [name, quantity, id, userId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Item tidak ditemukan' });
+    }
+    res.json({ message: 'Item berhasil diperbarui' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memperbarui item' });
+  }
+}
+
+async function deleteItem(req, res) {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const [result] = await pool.query('DELETE FROM items WHERE id = ? AND user_id = ?', [id, userId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Item tidak ditemukan' });
+    }
+    res.json({ message: 'Item berhasil dihapus' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghapus item' });
+  }
+}
+
+module.exports = { addItems, getTotals, deleteAll, getHistory, deleteByDate, getSessionTotals, getItemRows, updateItem, deleteItem };
