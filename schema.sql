@@ -1,0 +1,34 @@
+CREATE DATABASE IF NOT EXISTS waduh_db;
+USE waduh_db;
+
+CREATE TABLE users (
+    id INT NOT NULL AUTO_INCREMENT,
+    email VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE items (
+    id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    quantity INT NOT NULL,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    session_id VARCHAR(36) DEFAULT NULL,
+    PRIMARY KEY (id),
+    KEY (user_id),
+    CONSTRAINT items_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE item_prices (
+    id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    price INT NOT NULL,
+    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY unique_user_item (user_id, name),
+    CONSTRAINT item_prices_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

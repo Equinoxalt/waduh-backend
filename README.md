@@ -23,7 +23,7 @@ Backend ini dibuat sebagai bagian dari migrasi aplikasi Android native (Kotlin) 
 
 ## Struktur Proyek
 
-\`\`\`
+```
 waduh-backend/
 ├── config/
 │   └── database.js         # koneksi pool MySQL
@@ -38,7 +38,7 @@ waduh-backend/
 ├── server.js                # entry point + middleware verifyToken
 ├── schema.sql                # skema database lengkap
 └── .env.example               # template environment variable
-\`\`\`
+```
 
 ## API Endpoints
 
