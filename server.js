@@ -2,6 +2,9 @@ require('dotenv').config();
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET belum di-set di file .env');
 }
+if (!process.env.JWT_REFRESH_SECRET) {
+  throw new Error('JWT_REFRESH_SECRET belum di-set di file .env');
+}
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken'); // Import JWT untuk middleware
