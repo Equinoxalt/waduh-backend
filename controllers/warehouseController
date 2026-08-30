@@ -1,0 +1,95 @@
+const pool = require('../config/database');
+
+async function addMovements(req, res) {
+  try {
+    const userId = req.user.id;
+    const { movementType, items } = req.body;
+
+    if (movementType !== 'in' && movementType !== 'out') {
+      return res.status(400).json({ error: "movementType harus 'in' atau 'out'" });
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'items harus berupa array dan tidak boleh kosong' });
+    }
+
+    const validItems = [];
+    const skippedLines = [];
+
+    items.forEach((item, index) => {
+      const name = String(item.name || '').trim();
+      const quantity = Number(item.quantity);
+
+      if (name && Number.isInteger(quantity) && quantity > 0) {
+        validItems.push([userId, name, quantity, movementType]);
+      } else {
+        skippedLines.push(index + 1);
+      }
+    });
+
+    if (validItems.length > 0) {
+      await pool.query(
+        'INSERT INTO warehouse_movements (user_id, name, quantity, movement_type) VALUES ?',
+        [validItems]
+      );
+    }
+
+    res.status(201).json({ inserted: validItems.length, skipped: skippedLines.length, skippedLines });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menyimpan data gudang' });
+  }
+}
+
+async function getCurrentStock(req, res) {
+  try {
+    const userId = req.user.id;
+    const [rows] = await pool.query(
+      `SELECT name,
+              SUM(CASE WHEN movement_type = 'in' THEN quantity ELSE -quantity END) AS current_stock
+       FROM warehouse_movements
+       WHERE user_id = ?
+       GROUP BY name
+       ORDER BY name`,
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mengambil stok saat ini' });
+  }
+}
+
+async function getPeriodSummary(req, res) {
+  try {
+    const userId = req.user.id;
+    const scope = req.query.scope || 'today';
+
+    let dateFilter = '';
+    if (scope === 'today') {
+      dateFilter = 'AND DATE(created_at) = CURDATE()';
+    } else if (scope === 'month') {
+      dateFilter = 'AND YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())';
+    } else if (scope === 'all') {
+      dateFilter = '';
+    } else {
+      return res.status(400).json({ error: 'scope harus today, month, atau all' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT name,
+              SUM(CASE WHEN movement_type = 'in' THEN quantity ELSE 0 END) AS masuk,
+              SUM(CASE WHEN movement_type = 'out' THEN quantity ELSE 0 END) AS keluar
+       FROM warehouse_movements
+       WHERE user_id = ? ${dateFilter}
+       GROUP BY name
+       ORDER BY name`,
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mengambil ringkasan periode' });
+  }
+}
+
+module.exports = { addMovements, getCurrentStock, getPeriodSummary };

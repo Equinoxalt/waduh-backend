@@ -11,6 +11,7 @@ const jwt = require('jsonwebtoken'); // Import JWT untuk middleware
 const itemsRouter = require('./routes/items');
 const authRouter = require('./routes/auth'); // Import route auth
 const pricesRouter = require('./routes/prices');
+const warehouseRouter = require('./routes/warehouse');
 
 const app = express();
 
@@ -42,6 +43,7 @@ const verifyToken = (req, res, next) => {
 // 3. Daftarkan route items dengan proteksi middleware
 app.use('/api/items', verifyToken, itemsRouter);
 app.use('/api/prices', verifyToken, pricesRouter);
+app.use('/api/warehouse', verifyToken, warehouseRouter);
 
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {

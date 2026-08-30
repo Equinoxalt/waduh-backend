@@ -1,0 +1,9 @@
+const express = require('express');
+const router = express.Router();
+const { addMovements, getCurrentStock, getPeriodSummary } = require('../controllers/warehouseController');
+
+router.post('/movements', addMovements);
+router.get('/stock', getCurrentStock);
+router.get('/summary', getPeriodSummary);
+
+module.exports = router;
