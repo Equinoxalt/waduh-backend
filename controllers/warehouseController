@@ -49,6 +49,7 @@ async function getCurrentStock(req, res) {
        FROM warehouse_movements
        WHERE user_id = ?
        GROUP BY name
+       HAVING current_stock != 0
        ORDER BY name`,
       [userId]
     );
@@ -92,4 +93,48 @@ async function getPeriodSummary(req, res) {
   }
 }
 
-module.exports = { addMovements, getCurrentStock, getPeriodSummary };
+async function lookupBarcode(req, res) {
+  try {
+    const userId = req.user.id;
+    const { barcode } = req.params;
+    const [rows] = await pool.query(
+      'SELECT barcode, name, description FROM warehouse_products WHERE user_id = ? AND barcode = ?',
+      [userId, barcode]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Barcode belum terdaftar' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mencari barcode' });
+  }
+}
+
+async function registerProduct(req, res) {
+  try {
+    const userId = req.user.id;
+    const barcode = String(req.body.barcode || '').trim();
+    const name = String(req.body.name || '').trim();
+    const description = req.body.description ? String(req.body.description).trim() : null;
+
+    if (!barcode || !name) {
+      return res.status(400).json({ error: 'Barcode dan nama wajib diisi' });
+    }
+
+    await pool.query(
+      'INSERT INTO warehouse_products (user_id, barcode, name, description) VALUES (?, ?, ?, ?)',
+      [userId, barcode, name, description]
+    );
+
+    res.status(201).json({ message: 'Barcode berhasil didaftarkan' });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Barcode ini sudah terdaftar' });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mendaftarkan barcode' });
+  }
+}
+
+module.exports = { addMovements, getCurrentStock, getPeriodSummary, lookupBarcode, registerProduct };
